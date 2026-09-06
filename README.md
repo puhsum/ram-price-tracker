@@ -74,6 +74,23 @@ requests to the configured path, so a POST-only endpoint would return `405`
 on every scheduled run. The route therefore accepts both: GET for the
 scheduler, POST for manual triggering.
 
+**Why there's no history before the day you started.** Rakuten has no
+historical-price API — every endpoint it offers (Ichiba, Books, Travel, Kobo,
+GORA, Recipe) returns *current* listings only. Nothing anywhere will tell you
+what a kit cost last March. This app's history exists solely because the cron
+job records a snapshot each day and never overwrites one; the chart can only
+ever start from the first sync. Backfilling earlier dates would mean inventing
+numbers, which is worse than a short chart.
+
+**Getting denser data than once a day.** The daily cap is Vercel's free tier,
+not a limit of this app — `/api/sync` is just an HTTPS endpoint behind a bearer
+token, so *anything* on a timer can drive it. A free GitHub Actions scheduled
+workflow hitting it hourly would give ~24 points per kit per day. (Trade-off:
+GitHub disables scheduled workflows after 60 days without a commit, whereas
+Vercel's cron keeps running untouched.) Upgrading Vercel to Pro also lifts the
+cap. That the scheduler is swappable at all is a consequence of separating
+*the job* from *the thing that triggers the job*.
+
 **Why the secret matters.** A route handler is just a URL, and a URL is
 reachable by anyone who guesses it — being "the cron endpoint" grants no
 privacy on its own. `/api/sync` requires `Authorization: Bearer <CRON_SECRET>`
