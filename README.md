@@ -84,13 +84,71 @@ difference between "a job the platform triggers" and "a route anyone could
 hit" — which also keeps the GET defensible, since nothing can casually
 prefetch or cache it into running.
 
+## The REST API
+
+| Method | Route | Purpose | REST concept it demonstrates |
+|---|---|---|---|
+| `POST` | `/api/products` | Add a kit to track | Validation; `201` vs `400` |
+| `GET` | `/api/products` | List tracked kits | Collection resource |
+| `GET` | `/api/products/:id` | One kit + its latest price | Path params; `404` |
+| `GET` | `/api/products/:id/history` | Price over time | Nested resource; `?since=30d` filter |
+| `DELETE` | `/api/products/:id` | Stop tracking | `204`; idempotency |
+| `GET`/`POST` | `/api/sync` | Fetch prices from Rakuten | Secret-guarded internal endpoint; `401` |
+
+Conventions held everywhere: real status codes (never `200` for everything),
+consistent `{ "error": "..." }` bodies, and Zod validation on all input.
+
+`?since=` accepts `30d`, `12h` or `90m`; anything else is a `400`.
+
 ## Database
 
 `schema.sql` defines two tables: `products` (the kits being tracked) and
 `price_snapshots` (one row per price observation). Run it against your Neon
-database before starting milestone 3.
+database once, before first use.
+
+Snapshots are **append-only** — the sync job never updates an existing row.
+That's what makes a price history accumulate by itself, and it makes a
+duplicate cron run harmless rather than destructive.
+
+## Choosing a `search_keyword`
+
+This is the one part that needs human judgement, and getting it wrong produces
+confident, wrong data.
+
+Rakuten has **variant listings**: a single page selling 8/16/32/64GB of the
+same stick. On those, `itemPrice` is the price of the *cheapest* variant — so a
+loose keyword like `DDR5 32GB 5600` will happily report an 8GB stick's price
+under a 32GB label. Exact model numbers help but don't fully solve it:
+searching `CT2K16G56C46U5` (a 32GB kit) still surfaces a variant page priced
+from ¥37,010, when genuine listings for that kit start around ¥92,000.
+
+Two defences:
+
+1. **The sync job skips variant listings.** It walks results cheapest-first and
+   ignores any page whose dearest variant exceeds its cheapest by more than
+   1.5x. If nothing is left, it records *nothing* — a gap in the chart is
+   honest, a plausible-looking wrong number isn't.
+2. **Test a keyword before adding it:**
+   ```
+   node --env-file=.env.local scripts/check-keyword.mjs "CP2K16G56C46U5"
+   ```
+   It prints what Rakuten would return and flags variant listings, without
+   writing anything to the database. Keywords returning 0 results, or only
+   variant pages, are bad keywords — pick a different model number.
+
+## Helper scripts
+
+All read-only except where noted; run them with Node's `--env-file` flag so
+they can see `.env.local`:
+
+| Script | What it does |
+|---|---|
+| `scripts/check-db.mjs` | Confirms `DATABASE_URL` connects and lists tables |
+| `scripts/show-snapshots.mjs` | Prints the 20 most recent price snapshots |
+| `scripts/check-keyword.mjs "<kw>"` | Previews Rakuten results for a keyword |
 
 ## Project status
 
-Being built milestone-by-milestone — see `ram-price-tracker-cc-prompt.md` for
-the full build plan. Currently on: **Milestone 1 — scaffold**.
+All nine build milestones are complete: the six endpoints, the scheduled sync,
+and the dashboard are live. Price history accumulates one snapshot per kit per
+day with no manual work.

@@ -40,6 +40,11 @@ const RakutenItemSchema = z.object({
   itemPrice: z.number().int(),
   shopName: z.string(),
   itemUrl: z.string(),
+  // The highest price on the listing page. On a normal single-SKU listing this
+  // equals itemPrice; on a multi-variant page it's much larger. That gap is
+  // what lets us detect variant listings -- see isVariantListing below.
+  // Optional because not every response includes it.
+  itemPriceMax1: z.number().int().optional(),
 });
 
 const RakutenSearchResponseSchema = z.object({
@@ -72,14 +77,35 @@ function stripTrackingParams(rawUrl: string): string {
 }
 
 /**
- * Search Rakuten Ichiba for a keyword and return the cheapest listing,
- * or null if there were no results.
+ * Is this a multi-variant listing -- one page selling 8/16/32/64GB of the same
+ * stick, where `itemPrice` is the CHEAPEST variant rather than the capacity we
+ * searched for?
  *
- * Caveat worth knowing: on "variant" listings (one page selling 8/16/32/64GB
- * of the same stick) `itemPrice` is the price of the CHEAPEST variant, not of
- * the capacity you searched for. So a loose keyword like "DDR5 32GB 5600" can
- * report an 8GB stick's price. The fix is a precise `search_keyword` (a model
- * number like "CT2K16G56C46U5"), not more parsing code here.
+ * A real example: searching the exact model number "CT2K16G56C46U5" (a 32GB
+ * kit) returns a page priced from JPY 37,010 up to JPY 200,560. Recording
+ * 37,010 as "the price of a 32GB kit" would be plain wrong -- that's an 8GB
+ * stick on the same page. Genuine single-SKU listings for that kit start
+ * around JPY 92,000.
+ *
+ * The signal is the spread between the page's cheapest and dearest variant.
+ * A normal listing has little or none; a variant page has a lot. 1.5x is a
+ * deliberately loose threshold: it ignores ordinary within-listing variation
+ * (colour, a bundled cable) while catching capacity ladders, which always
+ * differ by 2x or more.
+ */
+function isVariantListing(item: z.infer<typeof RakutenItemSchema>): boolean {
+  if (!item.itemPriceMax1) return false;
+  return item.itemPriceMax1 > item.itemPrice * 1.5;
+}
+
+/**
+ * Search Rakuten Ichiba for a keyword and return the cheapest *relevant*
+ * listing, or null if there wasn't one.
+ *
+ * "Relevant" is doing real work here: we walk the results cheapest-first and
+ * skip variant listings (see above), because a wrong price is worse than no
+ * price. A gap in the chart is honest; a plausible-looking wrong number is
+ * not, and once it's in the database it silently distorts the history forever.
  */
 export async function fetchCheapestItem(
   keyword: string
@@ -127,16 +153,21 @@ export async function fetchCheapestItem(
     );
   }
 
-  // We asked Rakuten to sort by ascending price, so the first hit is the
-  // cheapest. Zero results is a normal outcome (a bad keyword, or nothing in
-  // stock), not an error -- the caller decides what to do about it.
-  const first = parsed.data.Items[0];
-  if (!first) return null;
+  // We asked Rakuten to sort by ascending price, so the results are already
+  // cheapest-first -- take the first one that isn't a variant listing.
+  //
+  // Zero usable results is a normal outcome (a bad keyword, nothing in stock,
+  // or every hit being a variant page), not an error. The caller decides what
+  // to do about it.
+  const match = parsed.data.Items.map((entry) => entry.Item).find(
+    (item) => !isVariantListing(item)
+  );
+  if (!match) return null;
 
   return {
-    itemName: first.Item.itemName,
-    price: first.Item.itemPrice,
-    shopName: first.Item.shopName,
-    itemUrl: stripTrackingParams(first.Item.itemUrl),
+    itemName: match.itemName,
+    price: match.itemPrice,
+    shopName: match.shopName,
+    itemUrl: stripTrackingParams(match.itemUrl),
   };
 }
