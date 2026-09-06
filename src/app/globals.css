@@ -1,34 +1,50 @@
+/* Design tokens. Defined once here as CSS custom properties so the light and
+   dark values swap in a single place, and every component is written against
+   roles (--surface-1, --series-1) rather than raw hex.
+
+   The chart colours were run through a contrast/colour-blindness validator
+   against both surfaces before being adopted -- the blue passes the lightness
+   band, chroma floor and 3:1 contrast in both modes. */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  color-scheme: light;
+
+  --page: #f9f9f7;
+  --surface-1: #fcfcfb;
+  --text-primary: #0b0b0b;
+  --text-secondary: #52514e;
+  --text-muted: #898781;
+  --grid: #e1e0d9;
+  --axis: #c3c2b7;
+  --border: rgba(11, 11, 11, 0.1);
+
+  /* Single categorical slot -- every chart plots one series (one product's
+     price), so there is exactly one series colour and no legend is needed. */
+  --series-1: #2a78d6;
+
+  /* Direction cues. Falling prices are good news for a shopper. These tint a
+     small arrow glyph only, never the text itself. */
+  --dir-down: #006300;
+  --dir-up: #d03b3b;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    color-scheme: dark;
+
+    --page: #0d0d0d;
+    --surface-1: #1a1a19;
+    --text-primary: #ffffff;
+    --text-secondary: #c3c2b7;
+    --text-muted: #898781;
+    --grid: #2c2c2a;
+    --axis: #383835;
+    --border: rgba(255, 255, 255, 0.1);
+
+    --series-1: #3987e5;
+
+    --dir-down: #0ca30c;
+    --dir-up: #e66767;
   }
-}
-
-html {
-  height: 100%;
-}
-
-html,
-body {
-  max-width: 100vw;
-  overflow-x: hidden;
-}
-
-body {
-  min-height: 100%;
-  display: flex;
-  flex-direction: column;
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
 }
 
 * {
@@ -37,13 +53,57 @@ body {
   margin: 0;
 }
 
-a {
-  color: inherit;
-  text-decoration: none;
+html,
+body {
+  max-width: 100vw;
 }
 
-@media (prefers-color-scheme: dark) {
-  html {
-    color-scheme: dark;
-  }
+body {
+  min-height: 100%;
+  color: var(--text-primary);
+  background: var(--page);
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+a {
+  color: inherit;
+}
+
+/* --- Recharts theming ------------------------------------------------------
+   Recharts writes colours as SVG *presentation attributes*, which don't
+   understand var(). CSS declarations outrank presentation attributes, so we
+   restyle its generated elements here instead -- that way the chart follows
+   the same tokens as everything else and reacts to dark mode with no JS. */
+
+.chart .recharts-cartesian-grid line {
+  stroke: var(--grid); /* hairline, solid, recessive -- never dashed */
+}
+
+.chart .recharts-cartesian-axis-line,
+.chart .recharts-cartesian-axis-tick-line {
+  stroke: var(--axis);
+}
+
+.chart .recharts-cartesian-axis-tick-value {
+  fill: var(--text-muted);
+  font-variant-numeric: tabular-nums; /* axis ticks align vertically */
+}
+
+.chart .recharts-line-curve {
+  stroke: var(--series-1);
+}
+
+/* Markers carry a 2px ring in the surface colour so they stay legible where
+   they overlap the line or each other. */
+.chart .recharts-dot {
+  fill: var(--series-1);
+  stroke: var(--surface-1);
+  stroke-width: 2;
+}
+
+/* The crosshair that tracks the pointer and snaps to the nearest date. */
+.chart .recharts-tooltip-cursor {
+  stroke: var(--axis);
 }

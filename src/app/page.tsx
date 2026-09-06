@@ -1,11 +1,13 @@
+// The one page of the app.
+//
+// This file is a Server Component (the App Router default) and does almost
+// nothing: it just renders <Dashboard />, which is a Client Component because
+// it needs browser APIs -- fetch-on-mount, useState, and Recharts' SVG
+// rendering. Keeping the boundary explicit like this is the normal App Router
+// shape: server by default, "use client" only where the browser is required.
+
+import { Dashboard } from "./dashboard";
+
 export default function Home() {
-  return (
-    <main style={{ padding: "2rem", fontFamily: "sans-serif" }}>
-      <h1>RAM Price Tracker</h1>
-      <p>
-        Dashboard coming in milestone 8. For now, the REST API lives under{" "}
-        <code>/api/*</code>.
-      </p>
-    </main>
-  );
+  return <Dashboard />;
 }
