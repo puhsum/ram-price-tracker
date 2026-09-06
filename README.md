@@ -1,8 +1,8 @@
 # RAM Price Tracker
 
 A dashboard that tracks Japanese RAM kit prices on Rakuten Ichiba over time.
-A scheduled job pulls fresh prices every few hours into Postgres, and the
-dashboard renders a price-history chart per kit.
+A scheduled job pulls fresh prices into Postgres once a day, and the dashboard
+renders a price-history chart per kit.
 
 This is also a learning project for **how REST APIs work** — both consuming
 someone else's (Rakuten's) and building your own (this app's `/api/*`
@@ -46,6 +46,7 @@ Two REST surfaces to point at:
 | Variable | Where it comes from | Purpose |
 |---|---|---|
 | `RAKUTEN_APP_ID` | [Rakuten Developers](https://webservice.rakuten.co.jp/) (free) | Query-param auth for the Ichiba Item Search API |
+| `RAKUTEN_ACCESS_KEY` | Issued alongside the app ID | Also required since Rakuten's 2026 security change — the app ID alone is rejected |
 | `DATABASE_URL` | [Neon](https://neon.tech) (free tier) | Postgres connection string for `products` / `price_snapshots` |
 | `CRON_SECRET` | You generate a random string | Bearer token that `/api/sync` requires, so only the Vercel Cron job (not the public internet) can trigger a fetch |
 
@@ -163,6 +164,7 @@ they can see `.env.local`:
 | `scripts/check-db.mjs` | Confirms `DATABASE_URL` connects and lists tables |
 | `scripts/show-snapshots.mjs` | Prints the 20 most recent price snapshots |
 | `scripts/check-keyword.mjs "<kw>"` | Previews Rakuten results for a keyword |
+| `scripts/delete-snapshot.mjs <id>` | **Writes.** Deletes a snapshot row, for correcting bad data |
 
 ## Project status
 
